@@ -11,8 +11,8 @@ A non-alphabetic character is required after each command.
 |--------------------------------|-------------------|
 | RIGHT                          | >                 |
 | LEFT                           | <                 |
-| UP                             | ++                |
-| DOWN                           | --                |
+| UP                             | +                 |
+| DOWN                           | -                 |
 | TOREE IS THE VERY BEST         | .                 |
 | MAN, I LOVE TO HEAR THAT SOUND | ,                 |
 | DO IT TIL' YOU GET ENOUGH      | [                 |

@@ -7,7 +7,7 @@ Uses parts of the lyrics from Sparkle Park (I Wanna Love U) by The Red Panda as 
 Punctuation is optional.
 A non-alphabetic character is required after each command.
 
-| toree-brainfuck command        | brainfuck command |
+| toreelang command              | brainfuck command |
 |--------------------------------|-------------------|
 | RIGHT                          | >                 |
 | LEFT                           | <                 |

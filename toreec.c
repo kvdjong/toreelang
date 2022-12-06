@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 
-#define WORDMAXLEN 32 // Max Word Length
-#define TOKENVINC 64 // Token Vector Increment
+#define MAX_WORD_LEN 32 // Max Word Length
+#define TOKENV_INC 64 // Token Vector Increment
 
 char *ops[] = {
     "RIGHT",
@@ -16,7 +16,7 @@ char *ops[] = {
     "WEREALWAYSUPFORAFIGHT",
 };
 
-enum {
+enum __ops {
     SHIFT_RIGHT,
     SHIFT_LEFT,
     INCREMENT,
@@ -28,60 +28,67 @@ enum {
 };
 
 char *scan(FILE *file, int *len) {
-    char *tokenv = malloc(TOKENVINC); // Token Vector
-    int tokenvidx = -1; // Token Vector Index
-    int tokenvallocs = 1; // Token Vector Allocations Done
+    char *tokenv = malloc(TOKENV_INC); // Token Vector
+    int tokenv_idx = -1; // Token Vector Index
+    int tokenv_allocs = 1; // Token Vector Allocations Done
     unsigned int chr; // Char
-    char word[WORDMAXLEN] = { 0 }; // Word
-    int wordidx = -1; // Word Index
+    char word[MAX_WORD_LEN + 1] = { 0 }; // Word (+1 is for null terminator)
+    int word_idx = -1; // Word Index
     
     do {
         chr = fgetc(file);
 
         if (chr >= 0x41 && chr <= 0x5A) { // Uppercase
-            if (wordidx + 1 == WORDMAXLEN) {
-                printf("Error: Unparseable sentence: %s\n", word);
+            if (word_idx + 1 == MAX_WORD_LEN) {
+                printf("Error: Unparseable word: %s...\n", word);
                 return NULL;
             }
-            wordidx++;
-            word[wordidx] = chr;
+            word_idx++;
+            word[word_idx] = chr;
         } else if (chr >= 0x61 && chr <= 0x7A) { // Lowercase
-            if (wordidx + 1 == WORDMAXLEN) {
-                printf("Error: Unparseable sentence: %s\n", word);
+            if (word_idx + 1 == MAX_WORD_LEN) {
+                printf("Error: Unparseable word: %s...\n", word);
                 return NULL;
             }
-            wordidx++;
-            word[wordidx] = chr - 0x20;
-        } else {
-            for (int i = 0; i < 8; i++) {
-                char *op = ops[i];
-                if (strncmp(op, word, strlen(op)) == 0) { // Word matches an operator
-                    if (tokenvidx + 1 == tokenvallocs * TOKENVINC) { // Realloc if Token Vector is too small
-                        tokenvallocs++;
-                        tokenv = realloc(tokenv, tokenvallocs * TOKENVINC);
-                        if (tokenv == NULL) {
-                            printf("Error: Could not reallocate memory for Token Vector\n");
-                            return NULL;
-                        }
-                    }
+            word_idx++;
+            word[word_idx] = chr - 0x20;
+        }
 
-                    tokenvidx++;
-                    tokenv[tokenvidx] = i;
-                    wordidx = -1;
-                    memset(word, 0, WORDMAXLEN);
-                    break;
+        for (int i = 0; i < 8; i++) {
+            char *op = ops[i];
+            if (strncmp(op, word, strlen(op)) == 0) { // Word matches an operator
+                // Reallocate token vector if it is too small
+                if (tokenv_idx + 1 == tokenv_allocs * TOKENV_INC) {
+                    tokenv_allocs++;
+                    tokenv = realloc(tokenv, tokenv_allocs * TOKENV_INC);
+                    if (tokenv == NULL) {
+                        printf("Error: Could not reallocate memory for token vector\n");
+                        return NULL;
+                    }
                 }
+
+                tokenv_idx++;
+                tokenv[tokenv_idx] = i;
+                word_idx = -1;
+                memset(word, 0, MAX_WORD_LEN);
+                break;
             }
         }
     } while (chr != EOF);
-    *len = tokenvallocs * TOKENVINC;
+
+    if (word_idx != -1) { // Current word is not empty
+        printf("Error: Unparseable word: %s...\n", word);
+        return NULL;
+    }
+
+    *len = tokenv_allocs * TOKENV_INC;
     return tokenv;
 }
 
-int compile(FILE *file, char *buf, int buflen) {
+int transpile(FILE *file, char *tokens, int tokens_len) {
     fputs("#include <stdio.h>\nint main(void) {char array[30000] = {0};char *ptr = array;", file);
-    for (int i = 0; i < buflen; i++) {
-        char op = buf[i];
+    for (int i = 0; i < tokens_len; i++) {
+        char op = tokens[i];
         if (op == SHIFT_RIGHT) fputs("++ptr;", file);
         else if (op == SHIFT_LEFT) fputs("--ptr;", file);
         else if (op == INCREMENT) fputs("++*ptr;", file);
@@ -99,33 +106,52 @@ int compile(FILE *file, char *buf, int buflen) {
     return 0;
 }
 
+
+
+int process(char *in_filename, char *out_filename) {
+    FILE *file = fopen(in_filename, "r");
+    if (file == NULL) {
+        printf("Error: Could not open file %s\n", in_filename);
+        return 1;
+    }
+
+    int tokens_len = 0;
+    char *tokens = scan(file, &tokens_len);
+    fclose(file);
+    if (tokens == NULL) return 1;
+
+    
+
+    file = fopen(out_filename, "w");
+    if (file == NULL) {
+        printf("Error: Could not open file %s\n", out_filename);
+        return 1;
+    }
+    int transpile_res = transpile(file, tokens, tokens_len);
+    fclose(file);
+    if (transpile_res != 0) return 1;
+
+    printf("Successfully transpiled %s into %s!\n", in_filename, out_filename);
+    return 0;
+}
 int main(int argc, char *argv[]) {
-    if (argc != 2) {
+    if (argc != 2) { // Does not have 1 argument passed
         printf("Usage: %s [filename]\n", argv[0]);
         return 1;
     }
+    
+    char *in_filename = argv[1];
 
-    FILE *file = fopen(argv[1], "r");
-    if (file == NULL) {
-        printf("Error: Could not open file %s\n", argv[1]);
+    size_t out_filename_size = strlen(in_filename) + 3;
+    char *out_filename = malloc(out_filename_size);
+    if (out_filename == NULL) {
+        printf("Error: Could not allocate memory for output file name\n");
         return 1;
     }
+    strncpy(out_filename, in_filename, out_filename_size);
+    strncat(out_filename, ".c", out_filename_size);
 
-    int buflen = 0;
-    char *buf = scan(file, &buflen);
-    if (buf == NULL) return 1;
-    fclose(file);
-
-    char *outfilename = malloc(strlen(argv[1]) + 3);
-    strcpy(outfilename, argv[1]);
-    strcat(outfilename, ".c");
-    file = fopen(outfilename, "w");
-    if (compile(file, buf, buflen) != 0) {
-        return 1;
-    }
-    fclose(file);
-
-    printf("Successfully compiled %s into %s!\n", argv[1], outfilename);
-    free(outfilename);
-    return 0;
+    int res = process(in_filename, out_filename);
+    free(out_filename);
+    return res;
 }
